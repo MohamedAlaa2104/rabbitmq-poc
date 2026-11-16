@@ -52,6 +52,21 @@ services:
       rabbitmq: { condition: service_healthy }
     networks: [app]
 
+  consumer-worker:     # Symfony worker: 1 message / 10s. NOT started by default
+    build: ./docker/php
+    container_name: consumer-worker
+    profiles: ["worker"]
+    working_dir: /app
+    environment:
+      <<: *rmq-env
+      APP_TYPE: symfony
+    command: php bin/console app:orders:consume
+    volumes:
+      - ./consumer:/app
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+    networks: [app]
+
 volumes:
   rabbitmq_data:
 
