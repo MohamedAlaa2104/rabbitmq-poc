@@ -1,0 +1,59 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4-management   # includes the management dashboard
+    container_name: rabbitmq
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Dashboard: http://localhost:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [app]
+
+  producer:            # Laravel
+    build: ./docker/php
+    container_name: producer
+    working_dir: /app
+    environment: &rmq-env
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      APP_TYPE: laravel
+    command: sh -c "php artisan serve --host=0.0.0.0 --port=8000"
+    volumes:
+      - ./producer:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+    networks: [app]
+
+  consumer:            # Symfony
+    build: ./docker/php
+    container_name: consumer
+    working_dir: /app
+    environment:
+      <<: *rmq-env
+      APP_TYPE: symfony
+    command: php -S 0.0.0.0:8001 -t public
+    volumes:
+      - ./consumer:/app
+    ports:
+      - "8001:8001"
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+    networks: [app]
+
+volumes:
+  rabbitmq_data:
+
+networks:
+  app:
